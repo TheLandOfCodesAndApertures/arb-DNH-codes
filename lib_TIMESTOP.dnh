@@ -1,0 +1,426 @@
+//timestop by arby26
+// v0.42
+
+// Create bullets whose movement can be stopped and started again
+//
+//   Bullets created and manipulated with standard or other functions
+//   wont be affected by these time-stopping functions.
+//
+// Include this file where it's needed.
+//
+// The functions to use for enemy/boss scripts are listed below
+//
+//-------- BULLET CREATION --------
+//***TS_CreateShotA2(x,y, speed, angle, acceleration, maxSpeed, bulletID, delay)
+//
+//     Creates time-stoppable bullets
+//
+//
+//-------- TIME STOPPING --------
+//***TimeStop_OnOff(objEnemy, delay, duration)
+//
+//     Waits for delay, then stops bullets for a set duration.
+//     If objEnemy is deleted, time-stop ends.
+//
+//***TimeStop_On(objEnemy, delay)
+//
+//     Waits for a delay, then stops bullets. They must be started again with TimeStop_Off().
+//     If objEnemy is deleted, time-stop ends.
+//
+//***TimeStop_Off(objEnemy, delay)
+//
+//     Waits for a delay, then resumes bullet movement.
+//     If objEnemy is deleted, time-stop ends.
+//
+//
+//-------- EXTRA BULLET MOVEMENT, TIME-STOPPABLE --------
+//***TSwait(time)
+//
+//     Like "wait(x)", but holds the remaining wait frames during time-stop.
+//
+//***TShold()
+//
+//     Reaching this while timestop is on will hold there until it's off.
+//
+//***ObjMoveTS_AddPatternA2(objectID, framesDelay, speed, angle, acceleration, angVelocity, maxSpeed)
+//
+//     Changes bullet's movement after waiting some frames/delay, which is time-stoppable
+//
+//***ObjMoveTS_SetSpeed(objectID, speed, delay)
+//
+//     Changes a bullet's speed after a delay
+//
+//***ObjMoveTS_SetAngle(objectID, angle, delay)
+//
+//     Changes a bullet's angle/direction after a delay
+//
+//***ObjMoveTS_SetAcceleration(objectID, acceleration, delay)
+//
+//     Changes a bullet's acceleration after a delay
+//
+//***ObjMoveTS_SetMaxSpeed(objectID, maxSpeed, delay)
+//
+//     Changes a bullet's top speed after a delay
+//
+//***ObjMoveTS_SetAngularVelocity(objectID, angVelocity, delay)
+//
+//     Changes a bullet's angular velocity after a delay
+//
+//
+// ------------------------------------------------------------------------------------------
+
+
+// If your game includes its own player, it's a good idea to add an event that time-stops
+//   the player from there rather than from here.
+
+// If you've defined an event to time-stop the player from the player script, set TS_USES_PLAYER_SCRIPT to true.
+let TS_USES_PLAYER_SCRIPT = false;
+
+// This is the event type of the player timestop event, you can change the +10 to another number if needed.
+let EV_TIMESTOP_PLAYER = EV_USER_PLAYER+10;
+
+
+
+local{
+	CreateRenderTarget("TS_RT1");
+}
+
+//"Private" variable. there's no need to change this from outside of here, use the TimeStop_On/Off functions.
+let ts_on = false;//shows if timestop is on or off
+
+//create bullets that can be time-stopped
+function TS_CreateShotA2(x,y,spd,ang,acc,mspd,bullet,delay){
+	let obj=CreateShotA2(x,y,0,ang,0,mspd,bullet,0);
+	TShotTask();
+	return obj;
+
+	task TShotTask(){
+		ObjShot_SetIntersectionEnable(obj, false);
+		ObjMoveTS_AddPatternA2(obj,delay-1, spd,ang, acc,0, mspd);
+
+		if(ts_on){	TS_BulletFlashNoTS(obj,delay-1);	}
+		else {	TS_BulletFlash(obj,delay-1);	}
+
+		ObjShot_SetIntersectionEnable(obj, true);
+	}
+}
+// ------------------------------------------------------------------------------------------
+// "Private" functions
+// These don't need to used outside of this file.
+	function TS_BulletFlash(obj,delay){
+		ascent(i in 1..delay+1){
+			if(Obj_IsDeleted(obj)){break;}
+			let scl = 2.75-i*1.75/(delay);//gtbot's values
+			let alpf = i*255/(delay);
+			ObjRender_SetScaleXYZ(obj, scl, scl, 1);
+			ObjRender_SetAlpha(obj, min(255, alpf));
+			yield;
+			while(ts_on){yield;}
+		}
+		ObjRender_SetScaleXYZ(obj, 1, 1, 1);
+	}
+	function TS_BulletFlashNoTS(obj,delay){
+		ascent(i in 1..delay+1){
+			if(Obj_IsDeleted(obj)){break;}
+			let scl = 2.75-i*1.75/(delay);//gtbot's values
+			let alpf = i*255/(delay);
+			ObjRender_SetScaleXYZ(obj, scl, scl, 1);
+			ObjRender_SetAlpha(obj, min(255, alpf));
+			yield;
+		}
+		ObjRender_SetScaleXYZ(obj, 1, 1, 1);
+	}
+//
+// ------------------------------------------------------------------------------------------
+
+task ObjMoveTS_SetSpeed(obj,spd,delay){
+	TSwait(delay);
+	Obj_SetValue(obj, "TS_S", spd);
+	TShold();
+	if(!ts_on){
+		ObjMove_SetSpeed(obj,spd);
+	}
+}
+task ObjMoveTS_SetAngle(obj,ang,delay){
+	TSwait(delay);
+	Obj_SetValue(obj, "TS_A", ang);
+	TShold();
+	if(!ts_on){
+		ObjMove_SetAngle(obj,ang);
+	}
+}
+task ObjMoveTS_SetAngularVelocity(obj,av,delay){
+	TSwait(delay);
+	Obj_SetValue(obj, "TS_AD", av);//angle difference (angular velocity)
+	TShold();
+	if(!ts_on){
+		ObjMove_SetAngularVelocity(obj,av);
+	}
+}
+task ObjMoveTS_SetAcceleration(obj,acc,delay){
+	TSwait(delay);
+	Obj_SetValue(obj, "TS_SD", acc);//speed difference (acceleration)
+	TShold();
+	if(!ts_on){
+		ObjMove_SetAcceleration(obj,acc);
+	}
+}
+task ObjMoveTS_SetMaxSpeed(obj,ms,delay){
+	TSwait(delay);
+	Obj_SetValue(obj, "TS_SM", ms);
+	TShold();
+	if(!ts_on){
+		ObjMove_SetMaxSpeed(obj,ms);
+	}
+}
+task ObjMoveTS_AddPatternA2(obj,f, SPD,ANG, ACC, AV, MSPD){
+	let t = 0;
+	while(!Obj_IsDeleted(obj) && t<f){
+		while(ts_on){yield;}
+		t++;
+		yield;
+	}
+	Obj_SetValue(obj, "TS_S", SPD);
+	Obj_SetValue(obj, "TS_SD", ACC);
+	Obj_SetValue(obj, "TS_SM", MSPD);
+	Obj_SetValue(obj, "TS_A", ANG);
+	Obj_SetValue(obj, "TS_AD", AV);
+	while(ts_on){yield;}
+	ObjMove_AddPatternA2(obj,0, SPD,ANG,ACC,AV,MSPD);
+}
+
+//use this to wait() during bullet tasks that can be stopped by timestop
+function TSwait(t){
+	loop(t){
+		while(ts_on){yield;}
+		yield;
+	}
+}
+
+function TShold(){
+	while(ts_on){yield;}
+}
+
+task TimeStop_OnOff(objEnemy, frame, duration){
+//this is what the enemy script should call to stop bullets for a set time
+//
+	let id = TS_On_NewID();
+	let id2 = TS_Off_NewID();
+	if(!ts_on){//only stop bullets if time isn't already stopped
+		loop(frame-1){//we must wait 1 extra frame to record acceleration and angular velocity
+			if(Obj_IsDeleted(objEnemy)){TimeStop_Break; return;}
+			if(id != TS_ON_ID || id2 != TS_OFF_ID){return;}//cancel this instance if another ON task gets set
+			yield;
+		}
+		ts_on = true;
+		TimeStop_StopPlayer();
+		TimeStop_StopBullets();//yields 1 frame
+	}
+	else{
+		yield;
+	}
+	loop(duration){
+		if(Obj_IsDeleted(objEnemy)){TimeStop_Break; return;}
+		if(id2 != TS_OFF_ID || id != TS_ON_ID){return;}//cancel this instance if another OFF task gets set
+		yield;
+	}
+	TimeStop_ResumePlayer();
+	TimeStop_ResumeBullets();
+	ts_on = false;
+}
+
+task TimeStop_On(objEnemy, frame){
+//this is what the enemy script should call to stop bullets for an indefinite amount of time
+//
+	let id = TS_On_NewID();
+	loop(frame-1){//we must wait 1 extra frame to record acceleration and angular velocity
+		if(Obj_IsDeleted(objEnemy)){TimeStop_Break; return;}
+		if(id != TS_ON_ID){return;}//cancel this instance if another ON task gets set
+		yield;
+	}
+	if(!ts_on){//only stop bullets if time isn't already stopped
+		ts_on = true;
+		TimeStop_StopPlayer();
+		TimeStop_StopBullets();//yields 1 frame
+	}
+}
+
+task TimeStop_Off(objEnemy, frame){
+//this is what the enemy script should call to resume bullet hell, when "TimeStop_On()" has been used.
+//
+	let id = TS_Off_NewID();
+	loop(frame){
+		if(Obj_IsDeleted(objEnemy)){TimeStop_Break; return;}
+		if(id != TS_OFF_ID){return;}//cancel this instance if another OFF task gets set
+		yield;
+	}
+	if(ts_on){
+		TimeStop_ResumePlayer();
+		TimeStop_ResumeBullets();
+		ts_on = false;
+	}
+}
+// ------------------------------------------------------------------------------------------
+// "Private" functions
+// These don't need to used outside of this file.
+
+	let TS_ON_ID=0;
+	function TS_On_NewID(){
+		TS_ON_ID=(TS_ON_ID+1)%512;
+		return TS_ON_ID;
+	}
+	let TS_OFF_ID=0;
+	function TS_Off_NewID(){
+		TS_OFF_ID=(TS_OFF_ID+1)%512;
+		return TS_OFF_ID;
+	}
+
+	function TimeStop_Break(){
+	//this is called when an enemy calling time stop is deleted
+	//
+		if(ts_on){
+			TimeStop_ResumePlayer();
+			TimeStop_ResumeBullets();
+			ts_on = false;
+		}
+	}
+	function TimeStop_StopPlayer(){
+		SetForbidPlayerShot(true);
+		SetForbidPlayerSpell(true);
+		NotifyEvent(GetPlayerScriptID(), EV_TIMESTOP_PLAYER, true);
+
+		if(!TS_USES_PLAYER_SCRIPT){
+			TPlayerGraphic();
+		}
+
+		task TPlayerGraphic(){
+			let frameWidth = GetStgFrameWidth();
+			let frameHeight = GetStgFrameHeight();
+			let frameLeft = GetStgFrameLeft();
+			let frameRight = frameLeft + frameWidth;
+			let frameTop = GetStgFrameTop();
+			let frameBottom = frameTop + frameHeight;
+			let pGraphic = ObjPrim_Create(OBJ_SPRITE_2D);
+			ObjPrim_SetTexture(pGraphic, "TS_RT1");
+			ObjSprite2D_SetSourceRect(pGraphic, frameLeft, frameTop, frameRight, frameBottom);
+			ObjSprite2D_SetDestRect(pGraphic, Get2DCameraX-frameWidth/2, 0, Get2DCameraX+frameWidth/2, frameHeight);//renderA1
+			//ObjSprite2D_SetDestRect(pGraphic, Get2DCameraX-frameWidth/2-frameLeft, -frameTop, Get2DCameraX+frameWidth/2-frameLeft, frameHeight-frameTop);//renderB1
+			Obj_SetRenderPriorityI(pGraphic, GetPlayerRenderPriorityI);
+
+			let objPlayer = GetPlayerObjectID();
+			Obj_SetValue(objPlayer, "TS", true);
+			Obj_SetVisible(pGraphic,false);
+			//RenderToTextureB1("TS_RT1", objPlayer, true);
+			RenderToTextureA1("TS_RT1", GetPlayerRenderPriorityI, GetPlayerRenderPriorityI, true);
+			Obj_SetVisible(pGraphic, true);
+			Obj_SetVisible(objPlayer, false);
+			let px = GetPlayerX;
+			let py = GetPlayerY;
+			while(ts_on){
+				ObjMove_SetPosition(objPlayer, px,py);
+				//ObjRender_SetPosition(pGraphic, -Get2DCameraX()+frameWidth/2,0,0);
+				yield;
+			}
+			Obj_DeleteValue(objPlayer, "TS");
+			ObjMove_SetPosition(objPlayer, px,py);
+			Obj_SetVisible(objPlayer, true);
+			Obj_Delete(pGraphic);
+		}
+	}
+	function TimeStop_ResumePlayer(){
+		SetForbidPlayerShot(false);
+		SetForbidPlayerSpell(false);
+		NotifyEvent(GetPlayerScriptID(), EV_TIMESTOP_PLAYER, false);
+	}
+	function TimeStop_StopBullets(){
+	//records bullet speed, angle, acceleration, and angular velocity.
+	//then stops all bullets
+	//this doesn't need to be called outside of this file
+	//
+
+		//get player bullet movement
+		let playerB = GetShotIdInCircleA2(GetStgFrameWidth/2, GetStgFrameHeight/2, (GetStgFrameHeight+GetStgFrameWidth), TARGET_PLAYER);
+		ascent(i in 0..length(playerB)){
+			let obj = playerB[i];
+			let spd = ObjMove_GetSpeed(obj);
+			let ang = ObjMove_GetAngle(obj);
+			Obj_SetValue(obj, "TS_S", spd);//speed
+			Obj_SetValue(obj, "TS_A", ang);//angle
+		}
+		yield;//must wait at least 1 frame to get acceleration and angular velocity
+		//record then stop player bullet movement
+		playerB = GetShotIdInCircleA2(GetStgFrameWidth/2, GetStgFrameHeight/2, (GetStgFrameHeight+GetStgFrameWidth), TARGET_PLAYER);
+		ascent(i in 0..length(playerB)){
+			let obj = playerB[i];
+
+			let spd = ObjMove_GetSpeed(obj);
+			let ang = ObjMove_GetAngle(obj);
+			if(!Obj_IsValueExists(obj,"TS_SD")){
+				Obj_SetValue(obj, "TS_SD", spd-Obj_GetValueD(obj,"TS_S",0));//speed difference (acceleration)
+			}
+			if(!Obj_IsValueExists(obj,"TS_AD")){
+				let av = ang-Obj_GetValueD(obj,"TS_A",0);
+				if(absolute(av) >= 5){Obj_Delete(obj);}
+				Obj_SetValue(obj, "TS_AD", av);//angle difference (angular velocity)
+			}
+			Obj_SetValue(obj, "TS_S", ObjMove_GetSpeed(obj));//speed
+			Obj_SetValue(obj, "TS_A", ObjMove_GetAngle(obj));//angle
+
+			ObjMove_SetSpeed(obj,0);
+			ObjMove_SetAcceleration(obj,0);
+			ObjMove_SetAngularVelocity(obj,0);
+		}
+
+		//enemy bullets
+		let allB = GetShotIdInCircleA2(GetStgFrameWidth/2, GetStgFrameHeight/2, (GetStgFrameHeight+GetStgFrameWidth), TARGET_ENEMY);
+		ascent(i in 0..length(allB)){
+			let obj = allB[i];
+
+			Obj_SetValue(obj, "TS_S", ObjMove_GetSpeed(obj) );//speed
+			Obj_SetValue(obj, "TS_A", ObjMove_GetAngle(obj) );//angle
+
+			ObjMove_SetSpeed(obj,0);
+			ObjMove_SetAcceleration(obj,0);
+			ObjMove_SetAngularVelocity(obj,0);
+		}
+	}
+	function TimeStop_ResumeBullets(){
+	//resumes bullet movement based on what was recorded with "TimeStop_StopBullets()"
+	//this doesn't need to be called outside of this file
+	//
+		let allB = GetShotIdInCircleA2(GetStgFrameWidth/2, GetStgFrameHeight/2, (GetStgFrameHeight+GetStgFrameWidth), TARGET_PLAYER);
+		ascent(i in 0..length(allB)){
+			let obj = allB[i];
+			if(Obj_IsValueExists(obj,"TS_S")){
+				ObjMove_SetSpeed(obj, Obj_GetValueD(obj,"TS_S",0));
+			}
+			else{Obj_Delete(obj);}
+			if(Obj_IsValueExists(obj,"TS_AD")){
+				ObjMove_SetAngularVelocity(obj, Obj_GetValueD(obj,"TS_AD",0));
+			}
+		}
+		allB = GetShotIdInCircleA2(GetStgFrameWidth/2, GetStgFrameHeight/2, (GetStgFrameHeight+GetStgFrameWidth), TARGET_ENEMY);
+		ascent(i in 0..length(allB)){
+			let obj = allB[i];
+			if(Obj_IsValueExists(obj,"TS_S")){
+				ObjMove_SetSpeed(obj, Obj_GetValueD(obj,"TS_S",0));
+			}
+			if(Obj_IsValueExists(obj,"TS_SD")){
+				ObjMove_SetAcceleration(obj, 1*Obj_GetValueD(obj,"TS_SD",0));
+			}
+			if(Obj_IsValueExists(obj,"TS_SM")){
+				ObjMove_SetMaxSpeed(obj, Obj_GetValueD(obj,"TS_SM",0));
+			}
+			if(Obj_IsValueExists(obj,"TS_A")){
+				ObjMove_SetAngle(obj, Obj_GetValueD(obj,"TS_A",0));
+			}
+			if(Obj_IsValueExists(obj,"TS_AD")){
+				ObjMove_SetAngularVelocity(obj, Obj_GetValueD(obj,"TS_AD",0));
+			}
+		}
+	}
+
+//
+// ------------------------------------------------------------------------------------------
+
+
